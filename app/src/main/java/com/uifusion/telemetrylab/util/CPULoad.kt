@@ -1,4 +1,4 @@
-package com.example.telemetrylab.util
+package com.uifusion.telemetrylab.util
 
 object CPULoad {
     fun doWork(load: Int): Long {

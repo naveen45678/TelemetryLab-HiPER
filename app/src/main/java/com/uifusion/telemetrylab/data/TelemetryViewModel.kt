@@ -29,11 +29,9 @@ class TelemetryViewModel : ViewModel() {
     private val _effectiveLoad = MutableStateFlow(2)
     val effectiveLoad: StateFlow<Int> = _effectiveLoad
 
-    // Dynamic load update - works even while service is running
     fun setLoad(newLoad: Int) {
         _computeLoad.value = newLoad
 
-        // If service is running, send update immediately
         if (_isRunning.value) {
             viewModelScope.launch {
                 updateServiceLoad(newLoad)
@@ -41,12 +39,10 @@ class TelemetryViewModel : ViewModel() {
         }
     }
 
-    private suspend fun updateServiceLoad(load: Int) {
-        // Send broadcast to update service load dynamically
-        val intent = Intent(TelemetryService.ACTION_UPDATE_LOAD).apply {
+    private fun updateServiceLoad(load: Int) {
+       Intent(TelemetryService.ACTION_UPDATE_LOAD).apply {
             putExtra(TelemetryService.EXTRA_LOAD, load)
         }
-        // Note: This will be sent from UI context when called
     }
 
     fun updateServiceLoadFromContext(context: Context, load: Int) {
@@ -77,7 +73,6 @@ class TelemetryViewModel : ViewModel() {
         _effectiveLoad.value = _computeLoad.value
     }
 
-    // Handle all metrics updates from service
     fun onMetrics(
         jank: Double,
         fpsVal: Double,
@@ -94,7 +89,6 @@ class TelemetryViewModel : ViewModel() {
         }
     }
 
-    // Handle battery saver status updates
     fun onBatterySaverChanged(isOn: Boolean) {
         viewModelScope.launch {
             _isBatterySaverOn.value = isOn
