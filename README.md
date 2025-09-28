@@ -1,37 +1,109 @@
-Telemetry Lab — README (1 page)
+# Telemetry Lab
 
-Goal
-----
-Build a Compose screen that simulates telemetry frames (20 Hz), performs CPU-heavy work off the main thread per frame, runs inside a foreground job/service, and reports jank% (last 30s). Adapt for Battery Saver.
+## Goal
+Build a Compose screen that simulates telemetry frames (20 Hz), performs CPU-heavy work off the main thread per frame, runs inside a foreground service, and reports jank% (last 30s). Adapt behavior for Battery Saver.
 
-What I implemented
-------------------
-- Compose UI: Start/Stop, Compute Load slider (0..8), stats panel (Jank %, FPS).
-- Foreground Service (`TelemetryService`) that:
-  - Runs a frame loop at 20 Hz (reduces to 10 Hz if Battery Saver ON).
-  - Executes deterministic CPU workload on `Dispatchers.Default` for each frame (controlled by slider).
-  - Publishes metrics via local broadcast; UI collects and displays them.
-  - Uses `startForeground()` with a notification and `android:foregroundServiceType="dataSync|sensor"` in manifest.
-- Jank monitoring: rolling 30s window; jank defined as frames exceeding 1.5× target interval (50ms for 20 Hz).
-- Battery Saver handling: if power-save on, reduce rate to 10Hz and decrement compute load by 1.
-- Macrobenchmark module (optional) and baseline profile packaging instructions included.
+---
 
-How to run
-----------
-1. Open in Android Studio (use API 33/34 emulator or device).
-2. Run the app on a device, open Telemetry screen, press Start.
-3. Change compute load via slider. Observe Jank% and FPS in the stats card.
-4. To test Battery Saver behavior: enable Power Save in device; start the service and verify rate reduces.
+## What I Implemented
 
-Notes & tuning tips
--------------------
-- Keep all heavy work off the main thread (use `Dispatchers.Default` or a dedicated thread pool).
-- Avoid allocating new large objects per frame; reuse buffers and objects.
-- If jank > 5% at load=2: lower per-frame allocations, chunk work across frames, or reduce per-frame compute and aggregate over time.
+- **Compose UI:**
+  - Start/Stop buttons
+  - **Dynamic** Compute Load slider (0–8) - works while service is running
+  - Stats panel showing **Jank %** and **FPS**
+  - Real-time battery saver status display
+  - Shows both requested load and effective load
 
-Files of interest
------------------
-- `ui/TelemetryScreen.kt` — Compose UI
-- `service/TelemetryService.kt` — foreground loop + CPU work
-- `util/CPULoad.kt` — deterministic load function
-- `util/JankMonitor.kt` — rolling jank calculation
+- **Foreground Service (`TelemetryService`):**
+  - Frame loop at 20 Hz (reduces to 10 Hz if Battery Saver ON)
+  - Executes deterministic CPU workload on `Dispatchers.Default` per frame
+  - **Dynamic load updates** - slider changes apply immediately while running
+  - Real-time battery saver detection via broadcast + polling backup
+  - Publishes metrics via local broadcast; UI collects and displays them
+  - Uses `startForeground()` with notification showing current load status
+  - `android:foregroundServiceType="dataSync"` for Android 14+ compliance
+
+- **Jank Monitoring:**
+  - Rolling **30-second window** (not 30 frames)
+  - Jank defined as frames exceeding 1.5× target interval (50ms for 20 Hz, 100ms for 10 Hz)
+  - Thread-safe metrics calculation with synchronized access
+
+- **Battery Saver Handling:**
+  - **Automatic detection** via `PowerManager` broadcast + polling fallback
+  - Reduces frame rate from 20 Hz → 10 Hz
+  - Decreases compute load by 1 (minimum 0)
+  - UI shows FPS as "-" during battery saver mode
+  - Real-time toast notifications when battery saver toggles
+
+- **Dynamic Features:**
+  - Slider updates service load **while running** via broadcast mechanism
+  - Battery saver changes detected and applied immediately
+  - Notification updates in real-time to show current vs effective load
+  - Thread-safe implementation using `AtomicInteger` and `@Volatile`
+
+---
+
+## How to Run
+
+1. Open project in Android Studio (API 33/34 recommended)
+2. Run app on device/emulator
+3. Open Telemetry screen, press **Start**
+4. **While running**: adjust compute load via slider - changes apply immediately
+5. Test Battery Saver: 
+   - Enable via Settings → Battery → Battery Saver, OR
+   - Use ADB: `adb shell settings put global low_power 1`
+   - Observe: Rate drops to 10 Hz, load reduces by 1, toast notification appears
+
+---
+
+## Performance Target
+
+- **Target: ≤5% jank at load=2** (normal conditions, battery saver off)
+- Monitor via stats panel in real-time
+- Notification shows: "Load: 2→1 | Rate: 10 Hz" during battery saver
+
+---
+
+## Architecture Highlights
+
+- **Thread Safety**: `AtomicInteger` for load updates, synchronized frame timing data
+- **Dynamic Updates**: Service responds to broadcasts for immediate load changes
+- **Robust Battery Detection**: Dual approach (broadcasts + polling) for reliability
+- **Clean Separation**: Service handles compute, UI handles display, ViewModel bridges
+
+---
+
+## Files of Interest
+
+- `ui/TelemetryScreen.kt` — Dynamic Compose UI with real-time updates
+- `service/TelemetryService.kt` — Foreground service with dynamic load handling
+- `data/TelemetryViewModel.kt` — State management with dynamic updates
+- `util/CPULoad.kt` — Deterministic CPU workload generator
+
+---
+
+## Testing Battery Saver
+
+```bash
+# Enable battery saver
+adb shell settings put global low_power 1
+
+# Disable battery saver  
+adb shell settings put global low_power 0
+
+# Check current state
+adb shell settings get global low_power
+
+# View service logs
+adb logcat -s TelemetryService
+```
+
+---
+
+## Key Improvements Over Basic Requirements
+
+1. **Dynamic Load Control** - Slider works while service runs (not just at start)
+2. **Real-time Battery Saver** - Instant detection and adaptation 
+3. **Enhanced UI Feedback** - Shows effective vs requested load
+4. **Robust Implementation** - Thread-safe with fallback mechanisms
+5. **Modern Android Compliance** - Proper foreground service types for Android 14+
